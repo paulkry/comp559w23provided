@@ -50,9 +50,7 @@ void initTextRender( string RES_DIR ) {
 		return;// -1;
 	}
 	FT_Face face;
-	//if (FT_New_Face(ft, "C:/Windows/Fonts/Arial.ttf", 0, &face)) {
-	// HOW are you supposed to know the name of these font files !?
- 	if (FT_New_Face(ft, (RES_DIR + "consola.ttf").c_str(), 0, &face)) {
+	if (FT_New_Face(ft, (RES_DIR + "/consola.ttf").c_str(), 0, &face)) {
 		std::cout << "ERROR::FREETYPE: Failed to load font" << std::endl;
 		return;// -1;
 	}
