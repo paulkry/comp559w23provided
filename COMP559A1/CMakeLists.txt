@@ -39,13 +39,13 @@ IF(NOT GLM_INCLUDE_DIR)
 ENDIF()
 INCLUDE_DIRECTORIES(${GLM_INCLUDE_DIR})
 
-SET(EIGEN_DIR $ENV{3RDPARTY_DIR}/eigen-3.4.0)
+SET(EIGEN_DIR $ENV{THIRDPARTY_DIR}/eigen-3.4.0)
 include_directories(${EIGEN_DIR})
 
-SET(FREETYPE_DIR $ENV{3RDPARTY_DIR}/freetype-2.12.1)
+SET(FREETYPE_DIR $ENV{THIRDPARTY_DIR}/freetype-2.12.1)
 IF(NOT FREETYPE_DIR)
 	# The environment variable was not set
-	SET(ERR_MSG "Please point the environment variable 3RDPARTY_DIR to the root directory of your freetype-2.12.1 installation.")
+	SET(ERR_MSG "Please point the environment variable THIRDPARTY_DIR to the root directory of your freetype-2.12.1 installation.")
 	MESSAGE(FATAL_ERROR ${ERR_MSG})
 ENDIF()
 IF(CMAKE_BUILD_TYPE MATCHES Release)
@@ -53,7 +53,11 @@ IF(CMAKE_BUILD_TYPE MATCHES Release)
     TARGET_LINK_LIBRARIES(${CMAKE_PROJECT_NAME} freetype ${FREETYPE_DIR}/release/Release/freetype.lib)
 ELSE()
 	ADD_SUBDIRECTORY(${FREETYPE_DIR} ${FREETYPE_DIR}/debug)
-TARGET_LINK_LIBRARIES(${CMAKE_PROJECT_NAME} freetype ${FREETYPE_DIR}/debug/Debug/freetyped.lib)
+	IF (WIN32)
+	    TARGET_LINK_LIBRARIES(${CMAKE_PROJECT_NAME} freetype ${FREETYPE_DIR}/debug/Debug/freetyped.lib)
+	ELSE()
+	    TARGET_LINK_LIBRARIES(${CMAKE_PROJECT_NAME} freetype ${FREETYPE_DIR}/debug/libfreetype.a)
+	ENDIF()
 
 ENDIF()
 INCLUDE_DIRECTORIES(${FREETYPE_DIR}/include)
@@ -62,7 +66,7 @@ INCLUDE_DIRECTORIES(${FREETYPE_DIR}/include)
 
 # Get the GLFW environment variable. There should be a CMakeLists.txt in the 
 # specified directory.
-SET(GLFW_DIR $ENV{3RDPARTY_DIR}/glfw-3.3.8)
+SET(GLFW_DIR $ENV{THIRDPARTY_DIR}/glfw-3.3.8)
 IF(NOT GLFW_DIR)
 	# The environment variable was not set
 	SET(ERR_MSG "Please point the environment variable GLFW_DIR to the root directory of your GLFW installation.")
@@ -91,7 +95,7 @@ INCLUDE_DIRECTORIES(${GLFW_DIR}/include)
 TARGET_LINK_LIBRARIES(${CMAKE_PROJECT_NAME} glfw ${GLFW_LIBRARIES})
 
 # Get the GLEW environment variable.
-SET(GLEW_DIR $ENV{3RDPARTY_DIR}/glew-2.1.0)
+SET(GLEW_DIR $ENV{THIRDPARTY_DIR}/glew-2.1.0)
 IF(NOT GLEW_DIR)
 	# The environment variable was not set
 	SET(ERR_MSG "Please point the environment variable GLEW_DIR to the root directory of your GLEW installation.")
@@ -124,7 +128,7 @@ IF(WIN32)
 )
 	ENDIF()
 ELSE()
-	TARGET_LINK_LIBRARIES(${CMAKE_PROJECT_NAME} ${GLEW_DIR}/lib/libGLEW.a)
+	TARGET_LINK_LIBRARIES(${CMAKE_PROJECT_NAME} GLEW)
 ENDIF()
 
 # Use c++17
