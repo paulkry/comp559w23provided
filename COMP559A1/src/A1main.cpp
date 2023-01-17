@@ -112,9 +112,9 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
         if (key == GLFW_KEY_1) {
             particleSystem.createSystem(1);
         } else if (key == GLFW_KEY_2) {
-            particleSystem.createSystem(1);
+            particleSystem.createSystem(2);
         } else if (key == GLFW_KEY_3) {
-            particleSystem.createSystem(1);
+            particleSystem.createSystem(3);
         }
     } else {
         if (key == GLFW_KEY_1) {
@@ -160,7 +160,7 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
     float scale = (mods & GLFW_MOD_SHIFT) ? 1.01f : 1 / 1.01f;
     if (key == GLFW_KEY_H) {
         cout << "h = " << (stepsize *= scale) << endl;
-    } else if (key == GLFW_KEY_C) {
+    } else if (key == GLFW_KEY_V) {
         cout << "c = " << (particleSystem.viscousDamping *= scale) << endl;
     } else if (key == GLFW_KEY_G) {
         cout << "g = " << (particleSystem.gravity *= scale) << endl;
