@@ -56,10 +56,12 @@ int ydown = 0;
 int xcurrent = 0;
 int ycurrent = 0;
 bool mouseDown = false;
+bool creatingParticle = false;
 bool mouseInWindow = false;
 bool grabbed = false;
 bool wasPinned = false;
 bool closeToParticlePairLine = false;
+bool canEdit = true; // True when simulation hasn't been run/stepped yet after reset (or start)
 
 // for openGL
 GLFWwindow* window; // Main application window
@@ -94,12 +96,15 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
         glfwSetWindowShouldClose(window, GL_TRUE);
     } else if ( key == GLFW_KEY_SPACE) {
         run = !run;
+        canEdit = false;
     } else if (key == GLFW_KEY_S) {
         for (int i = 0; i < substeps; i++) {
             particleSystem.advanceTime(stepsize / substeps);
         }
+        canEdit = false;
     } else if (key == GLFW_KEY_R) {
         particleSystem.resetParticles();
+        if (!run) canEdit = true;
     } else if (key == GLFW_KEY_C) {
         particleSystem.clearParticles();
         p1 = NULL;
@@ -154,7 +159,7 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
     } else if (key == GLFW_KEY_UP) {
         substeps++;
     } else if (key == GLFW_KEY_DOWN) {
-        substeps = min( substeps - 1, 1);
+        substeps = max( substeps - 1, 1);
     }
 
     float scale = (mods & GLFW_MOD_SHIFT) ? 1.01f : 1 / 1.01f;
@@ -176,46 +181,37 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
 void mouse_pos_callback(GLFWwindow* window, double x, double y) {
     xcurrent = floor(x);
     ycurrent = floor(y);
-    if (mouseDown) { // dragged
+    if (mouseDown) {
         if (grabbed) {
+            // dragging particle
             p1->p = glm::vec2(xcurrent, ycurrent);
             p1->v = glm::vec2(0, 0);
-            if (!run) {
+            if (canEdit) {
                 p1->p0 = p1->p;
                 p1->v0 = p1->v;
                 for (Spring* s : p1->springs) {
                     s->recomputeRestLength();
                 }
             }
-        } else {
-            findCloseParticles(xcurrent, ycurrent);
         }
     }
 }
 
 void mouse_callback(GLFWwindow* window, int button, int action, int mods) {
-    if (button == GLFW_MOUSE_BUTTON_LEFT) {
-        double x;
-        double y;
-        glfwGetCursorPos(window, &x, &y);
-        xcurrent = floor(x);
-        ycurrent = floor(y);
+    double x;
+    double y;
+    glfwGetCursorPos(window, &x, &y);
+    xcurrent = floor(x);
+    ycurrent = floor(y);
 
-        bool pressed = false;
-        bool released = false;
-        if (button == GLFW_MOUSE_BUTTON_LEFT) {
-            if (GLFW_PRESS == action) {
-                pressed = !mouseDown;
-                mouseDown = true;
-            } else if (GLFW_RELEASE == action) {
-                released = mouseDown;
-                mouseDown = false;
-            }
-        }
+    // Left MB is for dragging particles
+    // Right MB is for toggling pinned flags, creating particles, editing springs
+    // Note: RMB functions locked while using LMB. LMB locked while creating a particle (holding RMB).
 
-        if (pressed) {
-            xdown = xcurrent;
-            ydown = ycurrent;
+    if (button == GLFW_MOUSE_BUTTON_LEFT && !creatingParticle){
+        if (action == GLFW_PRESS){
+            mouseDown = true;
+
             findCloseParticles(xcurrent, ycurrent);
             if (p1 != NULL && d1 < grabThresh) {
                 wasPinned = p1->pinned;
@@ -224,28 +220,44 @@ void mouse_callback(GLFWwindow* window, int button, int action, int mods) {
                 p1->p = glm::vec2(xcurrent, ycurrent);
                 p1->v = glm::vec2(0, 0);
             }
-        }
+        } else if (action == GLFW_RELEASE && mouseDown){
+            mouseDown = false;
 
-        if (released) {
-            if (!grabbed && !run) {
+            if (grabbed && p1 != NULL) {
+                p1->pinned = wasPinned;
+                grabbed = false;
+            }
+        }
+    } else if (button == GLFW_MOUSE_BUTTON_RIGHT && !mouseDown){
+        findCloseParticles(xcurrent, ycurrent);
+        if (action == GLFW_PRESS){
+            if (p1 != NULL && d1 < grabThresh) {
+                p1->pinned = !p1->pinned;
+            } else {
+                // NOTE: Only allow creation of particles or springs during "editing phase",
+                //          i.e. after reset but before run or step. Otherwise, we get weird rest length values.
+
                 // were we within the threshold of a spring?
                 if (closeToParticlePairLine) {
-                    if (!particleSystem.removeSpring(p1, p2)) {
+                    if (!particleSystem.removeSpring(p1, p2) && canEdit) {
                         particleSystem.createSpring(p1, p2);
                     }
-                } else {
-                    Particle* p = particleSystem.createParticle(x, y, 0, 0);
-                    if (p1 != NULL && d1 < maxDist) {
-                        particleSystem.createSpring(p, p1);
-                    }
-                    if (p2 != NULL && d2 < maxDist) {
-                        particleSystem.createSpring(p, p2);
-                    }
+                } else if (canEdit) {
+                    creatingParticle = true;
                 }
-            } else if (grabbed && p1 != NULL) {
-                p1->pinned = !wasPinned;
             }
-            grabbed = false;
+        } else if (action == GLFW_RELEASE && creatingParticle) {
+            creatingParticle = false;
+
+            if (canEdit){ // check that we haven't run simulation during click
+                Particle* p = particleSystem.createParticle(x, y, 0, 0);
+                if (p1 != NULL && d1 < maxDist) {
+                    particleSystem.createSpring(p, p1);
+                }
+                if (p2 != NULL && d2 < maxDist) {
+                    particleSystem.createSpring(p, p2);
+                }
+            }
         }
     }
 }
@@ -318,16 +330,29 @@ void display() {
 
     particleSystem.display();
 
-    if (mouseDown) {
-        if (!grabbed) {
-            if (!run) {
-                // check particle pair line
-                if (p1 != NULL && p2 != NULL) {
-                    glm::vec2 v = p1->p - p2->p;
-                    v /= sqrt(v.x * v.x + v.y * v.y);
-                    double d = abs(v.x * (p1->p.y - ycurrent) - v.y * (p1->p.x - xcurrent));
-                    closeToParticlePairLine = d < grabThresh;
-                }
+    if (!mouseDown) {
+        // update close particles.
+        // Used for highlighting springs and particles, also used while creating particle to show springs to be created.
+        findCloseParticles(xcurrent, ycurrent);
+
+        if (creatingParticle && canEdit) {
+            // Draw possible springs
+            glPointSize(5.0f);
+            glLineWidth(2.0f);
+            drawLineToParticle(xcurrent, ycurrent, p1, d1);
+            drawLineToParticle(xcurrent, ycurrent, p2, d2);
+        } else {
+            if (p1 != NULL && d1 < grabThresh) { // highlight particle
+                glPointSize(15.0f);
+                glColor4d(0, 1, 0, 0.95);
+                glBegin(GL_POINTS);
+                glVertex2d(p1->p.x, p1->p.y);
+                glEnd();
+            } else if (p1 != NULL && p2 != NULL) { // Check if on spring (or possible spring) and highlight/draw
+                glm::vec2 v = p1->p - p2->p;
+                v /= sqrt(v.x * v.x + v.y * v.y);
+                double d = abs(v.x * (p1->p.y - ycurrent) - v.y * (p1->p.x - xcurrent));
+                closeToParticlePairLine = d < grabThresh;
                 if (closeToParticlePairLine) {
                     glColor4d(0, 1, 1, .5);
                     glLineWidth(3.0f);
@@ -335,44 +360,16 @@ void display() {
                     glVertex2d(p1->p.x, p1->p.y);
                     glVertex2d(p2->p.x, p2->p.y);
                     glEnd();
-                } else {
-                    glPointSize(5.0f);
-                    glLineWidth(2.0f);
-                    if (!run) {
-                        drawLineToParticle(xcurrent, ycurrent, p1, d1);
-                        drawLineToParticle(xcurrent, ycurrent, p2, d2);
-                    }
                 }
             }
-        } else {
-            glPointSize(15.0f);
-            glColor4d(0, 1, 0, 0.95);
-            glBegin(GL_POINTS);
-            glVertex2d(p1->p.x, p1->p.y);
-            glEnd();
         }
-    } else {
-        //if ( mouseInWindow ) {
-        findCloseParticles(xcurrent, ycurrent);
-        if (p1 != NULL && d1 < grabThresh) {
+    } else { //LMB is down
+        if (grabbed) { //highlight grabbed particle
             glPointSize(15.0f);
             glColor4d(0, 1, 0, 0.95);
             glBegin(GL_POINTS);
             glVertex2d(p1->p.x, p1->p.y);
             glEnd();
-        } else if (p1 != NULL && p2 != NULL) {
-            glm::vec2 v = p1->p - p2->p;
-            v /= sqrt(v.x * v.x + v.y * v.y);
-            double d = abs(v.x * (p1->p.y - ycurrent) - v.y * (p1->p.x - xcurrent));
-            closeToParticlePairLine = d < grabThresh;
-            if (closeToParticlePairLine) {
-                glColor4d(0, 1, 1, .5);
-                glLineWidth(3.0f);
-                glBegin(GL_LINES);
-                glVertex2d(p1->p.x, p1->p.y);
-                glVertex2d(p2->p.x, p2->p.y);
-                glEnd();
-            }
         }
     }
  }
